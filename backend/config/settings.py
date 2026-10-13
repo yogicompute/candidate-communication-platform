@@ -136,6 +136,15 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_HSTS_SECONDS", "0"))
 
+DUMMY_PROVIDER_URL = os.getenv("DUMMY_PROVIDER_URL", "http://127.0.0.1:8100").rstrip("/")
+DUMMY_PROVIDER_API_KEY = os.getenv("DUMMY_PROVIDER_API_KEY", "")
+PROVIDER_WEBHOOK_SECRET = os.getenv("PROVIDER_WEBHOOK_SECRET", "")
+PROVIDER_TIMEOUT_SECONDS = float(os.getenv("PROVIDER_TIMEOUT_SECONDS", "5"))
+if not DEBUG and not (DUMMY_PROVIDER_API_KEY and PROVIDER_WEBHOOK_SECRET):
+    raise ImproperlyConfigured(
+        "DUMMY_PROVIDER_API_KEY and PROVIDER_WEBHOOK_SECRET must be set when DJANGO_DEBUG is false."
+    )
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

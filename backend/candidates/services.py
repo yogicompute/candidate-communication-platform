@@ -1,19 +1,20 @@
 import re
 
 from django.db import IntegrityError, transaction
-from django.db.models import CharField, DateTimeField, Q, QuerySet, Value
+from django.db.models import OuterRef, Q, QuerySet, Subquery
 
 from candidates.models import Candidate, generate_public_id
 from config.exceptions import ApiError
+from messaging.models import Message
 
 MAX_PUBLIC_ID_ATTEMPTS = 5
 
 
 def with_last_message(queryset: QuerySet[Candidate]) -> QuerySet[Candidate]:
-    """Annotate each candidate with its latest message. Replaced by real subqueries in Phase 7."""
+    latest = Message.objects.filter(candidate=OuterRef("pk")).order_by("-created_at", "-id")
     return queryset.annotate(
-        last_message_at=Value(None, output_field=DateTimeField()),
-        last_message_status=Value(None, output_field=CharField()),
+        last_message_at=Subquery(latest.values("created_at")[:1]),
+        last_message_status=Subquery(latest.values("status")[:1]),
     )
 
 
