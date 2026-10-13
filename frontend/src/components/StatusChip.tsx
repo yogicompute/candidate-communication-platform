@@ -1,20 +1,20 @@
 import type { ReactElement } from 'react';
 import CheckIcon from '@mui/icons-material/Check';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import Chip from '@mui/material/Chip';
 import Typography from '@mui/material/Typography';
-import type { MessageStatus } from '@/types/message';
+import { MESSAGE_STATUS_LABELS, type MessageStatus } from '@/types/message';
 
 type Tone = 'success' | 'error' | 'info' | 'neutral';
 
-const STATUS_CONFIG: Record<MessageStatus, { label: string; tone: Tone; icon?: ReactElement }> = {
-  pending: { label: 'Pending', tone: 'neutral', icon: <ScheduleIcon /> },
-  sent: { label: 'Sent', tone: 'info' },
-  delivered: { label: 'Delivered', tone: 'info', icon: <CheckIcon /> },
-  read: { label: 'Read', tone: 'success', icon: <DoneAllIcon /> },
-  failed: { label: 'Failed', tone: 'error', icon: <ErrorOutlineIcon /> },
+const STATUS_STYLE: Record<MessageStatus, { tone: Tone; icon?: ReactElement }> = {
+  pending: { tone: 'neutral', icon: <ScheduleIcon /> },
+  sent: { tone: 'info' },
+  delivered: { tone: 'info', icon: <CheckIcon /> },
+  read: { tone: 'success', icon: <DoneAllIcon /> },
+  failed: { tone: 'error', icon: <ErrorOutlineIcon /> },
 };
 
 const TONE_STYLES = {
@@ -37,12 +37,12 @@ export default function StatusChip({ status }: StatusChipProps) {
     );
   }
 
-  const { label, tone, icon } = STATUS_CONFIG[status];
+  const { tone, icon } = STATUS_STYLE[status];
 
   return (
     <Chip
       size="small"
-      label={label}
+      label={MESSAGE_STATUS_LABELS[status]}
       icon={icon}
       sx={{ ...TONE_STYLES[tone], '& .MuiChip-icon': { color: 'inherit' } }}
     />

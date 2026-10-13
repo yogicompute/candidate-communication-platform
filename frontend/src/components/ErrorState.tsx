@@ -1,4 +1,4 @@
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import EmptyState from '@/components/EmptyState';

@@ -1,24 +1,20 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 import Toolbar from '@mui/material/Toolbar';
-
-const NAV_ITEMS = [{ label: 'Candidates', href: '/candidates' }] as const;
+import MainNav from '@/components/layout/MainNav';
 
 interface AppShellProps {
   children: ReactNode;
 }
 
 export default function AppShell({ children }: AppShellProps) {
-  const pathname = usePathname();
-
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <AppBar
@@ -44,23 +40,9 @@ export default function AppShell({ children }: AppShellProps) {
           >
             Candidate Communication
           </Button>
-          <Box component="nav" aria-label="Main navigation" sx={{ display: 'flex', gap: 1 }}>
-            {NAV_ITEMS.map((item) => {
-              const isActive = pathname.startsWith(item.href);
-              return (
-                <Button
-                  key={item.href}
-                  component={Link}
-                  href={item.href}
-                  color={isActive ? 'primary' : 'inherit'}
-                  aria-current={isActive ? 'page' : undefined}
-                  sx={{ fontWeight: isActive ? 700 : 500 }}
-                >
-                  {item.label}
-                </Button>
-              );
-            })}
-          </Box>
+          <Suspense fallback={null}>
+            <MainNav />
+          </Suspense>
         </Toolbar>
       </AppBar>
       <Container
