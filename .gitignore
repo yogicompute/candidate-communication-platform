@@ -1,0 +1,30 @@
+# OS / editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Environment files (commit only *.env.example)
+.env
+.env.*
+!.env.example
+
+# Node / Next.js
+node_modules/
+frontend/.next/
+frontend/out/
+frontend/coverage/
+frontend/next-env.d.ts
+*.tsbuildinfo
+npm-debug.log*
+
+# Python / Django
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+backend/db.sqlite3
+backend/staticfiles/
+.pytest_cache/
+.coverage
+htmlcov/
