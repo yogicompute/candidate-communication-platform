@@ -1,9 +1,17 @@
+import logging
+
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from config.exceptions import ApiError
 from messaging.idempotency import get_idempotency_key, run_idempotent
 from messaging.serializers import BulkSendSerializer, MessageSerializer, SendMessageSerializer
 from messaging.services import RecipientResult, list_candidate_messages, send_bulk, send_message
+from messaging.webhooks import process_status_event
+from providers.base import InvalidPayload, InvalidSignature
+from providers.registry import get_provider
+
+logger = logging.getLogger(__name__)
 
 REPLAY_HEADER = "Idempotent-Replayed"
 
@@ -66,3 +74,19 @@ class BulkMessageView(APIView):
             return 200, _bulk_body(bulk_request_id, results)
 
         return _respond(*run_idempotent(key=key, scope="messages.bulk", payload=data, handler=handler))
+
+
+class ProviderWebhookView(APIView):
+    """Receives signed status callbacks from the provider. Never called by the frontend."""
+
+    def post(self, request):
+        provider = get_provider()
+        try:
+            event = provider.parse_callback(body=request.body, headers=request.headers)
+        except InvalidSignature:
+            logger.warning("Rejected a provider callback with a missing or invalid signature.")
+            raise ApiError("Invalid signature.", code="unauthorized", status_code=401) from None
+        except InvalidPayload as exc:
+            raise ApiError(str(exc), code="invalid_payload", status_code=400) from None
+
+        return Response({"result": process_status_event(provider.name, event)})

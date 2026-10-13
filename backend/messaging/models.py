@@ -92,3 +92,30 @@ class IdempotencyRecord(models.Model):
 
     def __str__(self) -> str:
         return f"{self.scope} {self.key}"
+
+
+class EventOutcome(models.TextChoices):
+    APPLIED = "applied", "Applied"
+    IGNORED = "ignored", "Ignored (older or not allowed)"
+
+
+class MessageEvent(models.Model):
+    """Audit log of every accepted provider callback. Duplicates are rejected by the unique constraint."""
+
+    message = models.ForeignKey(Message, on_delete=models.PROTECT, related_name="events")
+    provider = models.CharField(max_length=30)
+    event_id = models.CharField(max_length=100)
+    status = models.CharField(max_length=10, choices=MessageStatus.choices)
+    failure_code = models.CharField(max_length=30, choices=FailureCode.choices, null=True, blank=True)
+    occurred_at = models.DateTimeField()
+    received_at = models.DateTimeField(auto_now_add=True)
+    outcome = models.CharField(max_length=10, choices=EventOutcome.choices)
+
+    class Meta:
+        ordering = ["received_at", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["provider", "event_id"], name="message_event_unique_per_provider"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.event_id} {self.status} ({self.outcome})"

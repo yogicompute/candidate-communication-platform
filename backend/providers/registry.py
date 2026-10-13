@@ -11,5 +11,6 @@ def get_provider() -> MessagingProvider:
     return DummyProvider(
         base_url=settings.DUMMY_PROVIDER_URL,
         api_key=settings.DUMMY_PROVIDER_API_KEY,
+        webhook_secret=settings.PROVIDER_WEBHOOK_SECRET,
         timeout=settings.PROVIDER_TIMEOUT_SECONDS,
     )

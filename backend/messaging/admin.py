@@ -1,6 +1,17 @@
 from django.contrib import admin
 
-from messaging.models import Message
+from messaging.models import Message, MessageEvent
+
+
+class MessageEventInline(admin.TabularInline):
+    model = MessageEvent
+    extra = 0
+    can_delete = False
+    fields = ("event_id", "status", "failure_code", "occurred_at", "received_at", "outcome")
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Message)
@@ -29,3 +40,4 @@ class MessageAdmin(admin.ModelAdmin):
         "read_at",
         "failed_at",
     )
+    inlines = [MessageEventInline]
