@@ -1,6 +1,7 @@
 import { ApiError } from '@/services/apiError';
 import type { CandidateService } from '@/services/candidateService';
-import { getDb, saveDb, simulateNetwork } from '@/services/mock/mockDb';
+import { getDb, saveDb, simulateNetwork, type CandidateRecord } from '@/services/mock/mockDb';
+import { latestMessageFor, syncMessageStatuses } from '@/services/mock/mockMessageService';
 import type { FieldErrors } from '@/types/api';
 import type { Candidate, CandidateInput, CandidateStatusFilter } from '@/types/candidate';
 import { hasErrors, normalizeCandidateInput, validateCandidateInput } from '@/utils/validation';
@@ -8,7 +9,7 @@ import { hasErrors, normalizeCandidateInput, validateCandidateInput } from '@/ut
 const ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ID_LENGTH = 6;
 
-function generateId(candidates: Candidate[]): string {
+function generateId(candidates: CandidateRecord[]): string {
   const taken = new Set(candidates.map((candidate) => candidate.id));
   let id: string;
   do {
@@ -18,6 +19,15 @@ function generateId(candidates: Candidate[]): string {
     ).join('');
   } while (taken.has(id));
   return id;
+}
+
+function toCandidate(record: CandidateRecord): Candidate {
+  const latest = latestMessageFor(record.id);
+  return {
+    ...record,
+    lastMessageAt: latest?.createdAt ?? null,
+    lastMessageStatus: latest?.status ?? null,
+  };
 }
 
 function matchesSearch(candidate: Candidate, search: string): boolean {
@@ -41,12 +51,14 @@ function matchesStatus(candidate: Candidate, status?: CandidateStatusFilter): bo
 export const mockCandidateService: CandidateService = {
   async list({ search = '', status, page, pageSize }) {
     await simulateNetwork();
+    syncMessageStatuses();
     const matches = getDb()
-      .candidates.filter((c) => matchesSearch(c, search) && matchesStatus(c, status))
+      .candidates.map(toCandidate)
+      .filter((c) => matchesSearch(c, search) && matchesStatus(c, status))
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
     const start = (page - 1) * pageSize;
     return {
-      items: matches.slice(start, start + pageSize).map((c) => ({ ...c })),
+      items: matches.slice(start, start + pageSize),
       total: matches.length,
       page,
       pageSize,
@@ -55,11 +67,12 @@ export const mockCandidateService: CandidateService = {
 
   async get(id) {
     await simulateNetwork();
-    const candidate = getDb().candidates.find((c) => c.id === id.toUpperCase());
-    if (!candidate) {
+    syncMessageStatuses();
+    const record = getDb().candidates.find((c) => c.id === id.toUpperCase());
+    if (!record) {
       throw new ApiError('This candidate does not exist or was removed.', 404);
     }
-    return { ...candidate };
+    return toCandidate(record);
   },
 
   async create(rawInput) {
@@ -82,15 +95,13 @@ export const mockCandidateService: CandidateService = {
       throw new ApiError('This candidate already exists.', 409, duplicates);
     }
 
-    const candidate: Candidate = {
+    const record: CandidateRecord = {
       id: generateId(db.candidates),
       ...input,
       createdAt: new Date().toISOString(),
-      lastMessageAt: null,
-      lastMessageStatus: null,
     };
-    db.candidates.push(candidate);
+    db.candidates.push(record);
     saveDb();
-    return { ...candidate };
+    return toCandidate(record);
   },
 };

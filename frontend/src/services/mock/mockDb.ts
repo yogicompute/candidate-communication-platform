@@ -1,12 +1,26 @@
 import { ApiError } from '@/services/apiError';
-import { SEED_CANDIDATES } from '@/services/mock/mockData';
+import { SEED_CANDIDATES, SEED_MESSAGES } from '@/services/mock/mockData';
 import type { Candidate } from '@/types/candidate';
+import type { BulkSendResult, FailureCode, Message, MessageStatus } from '@/types/message';
 
-const STORAGE_KEY = 'ccp:mock-db:v1';
+const STORAGE_KEY = 'ccp:mock-db:v2';
 const FAIL_KEY = 'ccp:mock-fail';
 
+export type CandidateRecord = Omit<Candidate, 'lastMessageAt' | 'lastMessageStatus'>;
+
+export type MessageRecord = Omit<Message, 'canRetry'>;
+
+export interface StatusEvent {
+  status: Exclude<MessageStatus, 'pending'>;
+  at: string;
+  failureCode?: FailureCode;
+}
+
 export interface MockDb {
-  candidates: Candidate[];
+  candidates: CandidateRecord[];
+  messages: MessageRecord[];
+  pendingCallbacks: Record<string, StatusEvent[]>;
+  idempotency: Record<string, Message | BulkSendResult>;
 }
 
 let db: MockDb | null = null;
@@ -14,7 +28,12 @@ let db: MockDb | null = null;
 const isBrowser = () => typeof window !== 'undefined';
 
 function seedDb(): MockDb {
-  return { candidates: structuredClone(SEED_CANDIDATES) };
+  return {
+    candidates: structuredClone(SEED_CANDIDATES),
+    messages: structuredClone(SEED_MESSAGES),
+    pendingCallbacks: {},
+    idempotency: {},
+  };
 }
 
 function readStoredDb(): MockDb | null {

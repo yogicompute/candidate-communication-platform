@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SearchIcon from '@mui/icons-material/Search';
 import SendIcon from '@mui/icons-material/Send';
-import Alert from '@mui/material/Alert';
+import Alert, { type AlertColor } from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import InputAdornment from '@mui/material/InputAdornment';
@@ -23,11 +23,13 @@ import LoadingState from '@/components/LoadingState';
 import PageHeader from '@/components/PageHeader';
 import AddCandidateDialog from '@/features/candidates/AddCandidateDialog';
 import CandidateTable from '@/features/candidates/CandidateTable';
+import BulkMessageDialog from '@/features/messages/BulkMessageDialog';
 import { getErrorMessage } from '@/services/apiError';
 import { candidateService } from '@/services/candidateService';
 import type { Paginated } from '@/types/api';
 import type { Candidate, CandidateStatusFilter } from '@/types/candidate';
-import { MESSAGE_STATUSES, MESSAGE_STATUS_LABELS } from '@/types/message';
+import { MESSAGE_STATUSES, MESSAGE_STATUS_LABELS, type BulkSendResult } from '@/types/message';
+import { summarizeBulkResult } from '@/utils/messages';
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -46,6 +48,11 @@ interface LoadResult {
   error?: string;
 }
 
+interface Notice {
+  severity: AlertColor;
+  text: string;
+}
+
 export default function CandidatesView() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -53,9 +60,13 @@ export default function CandidatesView() {
   const [page, setPage] = useState(0);
   const [reloadToken, setReloadToken] = useState(0);
   const [result, setResult] = useState<LoadResult | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [selected, setSelected] = useState<Map<string, Candidate>>(() => new Map());
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkSession, setBulkSession] = useState(0);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const bulkOpenRef = useRef(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   const requestKey = [search, statusFilter, page, reloadToken].join('|');
 
@@ -95,6 +106,8 @@ export default function CandidatesView() {
   const data = result?.data;
   const error = isLoading ? null : (result?.error ?? null);
   const hasFilters = search !== '' || statusFilter !== 'all';
+  const selectedIds = new Set(selected.keys());
+  const recipients = Array.from(selected.values(), (c) => ({ id: c.id, fullName: c.fullName }));
 
   function reload() {
     setReloadToken((token) => token + 1);
@@ -108,25 +121,28 @@ export default function CandidatesView() {
   }
 
   function toggleOne(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
+    const candidate = data?.items.find((item) => item.id === id);
+    if (!candidate) return;
+    setSelected((prev) => {
+      const next = new Map(prev);
       if (next.has(id)) {
         next.delete(id);
       } else {
-        next.add(id);
+        next.set(id, candidate);
       }
       return next;
     });
   }
 
   function toggleAll(ids: string[], checked: boolean) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      for (const id of ids) {
+    const pageItems = data?.items.filter((item) => ids.includes(item.id)) ?? [];
+    setSelected((prev) => {
+      const next = new Map(prev);
+      for (const candidate of pageItems) {
         if (checked) {
-          next.add(id);
+          next.set(candidate.id, candidate);
         } else {
-          next.delete(id);
+          next.delete(candidate.id);
         }
       }
       return next;
@@ -135,9 +151,25 @@ export default function CandidatesView() {
 
   function handleCreated(candidate: Candidate) {
     setDialogOpen(false);
-    setNotice(`${candidate.fullName} was added.`);
+    setNotice({ severity: 'success', text: `${candidate.fullName} was added.` });
     clearFilters();
     reload();
+  }
+
+  function setBulkDialogOpen(open: boolean) {
+    bulkOpenRef.current = open;
+    setBulkOpen(open);
+  }
+
+  function openBulkDialog() {
+    if (!bulkBusy) setBulkSession((session) => session + 1);
+    setBulkDialogOpen(true);
+  }
+
+  function handleBulkCompleted(bulkResult: BulkSendResult) {
+    setSelected(new Map());
+    reload();
+    if (!bulkOpenRef.current) setNotice(summarizeBulkResult(bulkResult));
   }
 
   let content: ReactNode = null;
@@ -184,6 +216,10 @@ export default function CandidatesView() {
     );
   }
 
+  const sendLabel = bulkBusy
+    ? 'Sending…'
+    : `Send message${selected.size > 0 ? ` (${selected.size})` : ''}`;
+
   return (
     <>
       <PageHeader
@@ -196,8 +232,13 @@ export default function CandidatesView() {
             <Button variant="contained" startIcon={<DeleteIcon />} disabled>
               Delete candidate
             </Button>
-            <Button variant="contained" startIcon={<SendIcon />} disabled>
-              Send message
+            <Button
+              variant="contained"
+              startIcon={<SendIcon />}
+              disabled={selected.size === 0 && !bulkBusy}
+              onClick={openBulkDialog}
+            >
+              {sendLabel}
             </Button>
             <TextField
               type="search"
@@ -245,12 +286,12 @@ export default function CandidatesView() {
               </MenuItem>
             ))}
           </TextField>
-          {selectedIds.size > 0 && (
+          {selected.size > 0 && (
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', ml: { sm: 'auto' } }}>
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                {selectedIds.size} selected
+                {selected.size} selected
               </Typography>
-              <Button size="small" onClick={() => setSelectedIds(new Set())}>
+              <Button size="small" onClick={() => setSelected(new Map())}>
                 Clear selection
               </Button>
             </Stack>
@@ -266,14 +307,23 @@ export default function CandidatesView() {
         onCreated={handleCreated}
       />
 
+      <BulkMessageDialog
+        key={bulkSession}
+        open={bulkOpen}
+        recipients={recipients}
+        onClose={() => setBulkDialogOpen(false)}
+        onBusyChange={setBulkBusy}
+        onCompleted={handleBulkCompleted}
+      />
+
       <Snackbar
         open={notice !== null}
-        autoHideDuration={4000}
+        autoHideDuration={5000}
         onClose={() => setNotice(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert severity="success" variant="filled" onClose={() => setNotice(null)}>
-          {notice}
+        <Alert severity={notice?.severity ?? 'success'} variant="filled" onClose={() => setNotice(null)}>
+          {notice?.text}
         </Alert>
       </Snackbar>
     </>
