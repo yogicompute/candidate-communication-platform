@@ -6,6 +6,7 @@ from config.views import health
 api_v1_patterns = [
     path("health/", health, name="health"),
     path("", include("candidates.urls")),
+    path("", include("messaging.urls")),
 ]
 
 urlpatterns = [

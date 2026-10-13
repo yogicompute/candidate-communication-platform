@@ -9,6 +9,7 @@ from providers.base import FailureCode
 
 MAX_ATTEMPTS = 3
 MESSAGE_MAX_LENGTH = 1000
+MAX_BULK_RECIPIENTS = 100
 
 
 def generate_message_id() -> str:
@@ -77,3 +78,17 @@ class Message(models.Model):
             and self.retry_attempt is None
             and self.attempt_number < MAX_ATTEMPTS
         )
+
+
+class IdempotencyRecord(models.Model):
+    """Remembers the response to a client request so a repeated request is replayed, not re-sent."""
+
+    key = models.CharField(max_length=100, unique=True)
+    scope = models.CharField(max_length=50)
+    request_hash = models.CharField(max_length=64)
+    status_code = models.PositiveSmallIntegerField(null=True, blank=True)
+    response_body = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    def __str__(self) -> str:
+        return f"{self.scope} {self.key}"
