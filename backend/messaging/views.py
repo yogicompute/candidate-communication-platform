@@ -6,7 +6,13 @@ from rest_framework.views import APIView
 from config.exceptions import ApiError
 from messaging.idempotency import get_idempotency_key, run_idempotent
 from messaging.serializers import BulkSendSerializer, MessageSerializer, SendMessageSerializer
-from messaging.services import RecipientResult, list_candidate_messages, send_bulk, send_message
+from messaging.services import (
+    RecipientResult,
+    list_candidate_messages,
+    retry_message,
+    send_bulk,
+    send_message,
+)
 from messaging.webhooks import process_status_event
 from providers.base import InvalidPayload, InvalidSignature
 from providers.registry import get_provider
@@ -76,6 +82,17 @@ class BulkMessageView(APIView):
         return _respond(*run_idempotent(key=key, scope="messages.bulk", payload=data, handler=handler))
 
 
+class RetryMessageView(APIView):
+    def post(self, request, public_id: str):
+        key = get_idempotency_key(request)
+
+        def handler() -> tuple[int, dict]:
+            return 201, dict(MessageSerializer(retry_message(public_id)).data)
+
+        payload = {"message_id": public_id}
+        return _respond(*run_idempotent(key=key, scope="messages.retry", payload=payload, handler=handler))
+
+
 class ProviderWebhookView(APIView):
     """Receives signed status callbacks from the provider. Never called by the frontend."""
 
@@ -89,4 +106,4 @@ class ProviderWebhookView(APIView):
         except InvalidPayload as exc:
             raise ApiError(str(exc), code="invalid_payload", status_code=400) from None
 
-        return Response({"result": process_status_event(provider.name, event)})
+        return Response(process_status_event(provider.name, event))

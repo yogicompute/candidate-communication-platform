@@ -1,6 +1,7 @@
 import secrets
 
 from django.db import models
+from django.db.models import Q
 from django.db.models.functions import Lower
 
 PUBLIC_ID_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -11,18 +12,35 @@ def generate_public_id() -> str:
     return "".join(secrets.choice(PUBLIC_ID_ALPHABET) for _ in range(PUBLIC_ID_LENGTH))
 
 
+class CandidateQuerySet(models.QuerySet):
+    def active(self) -> "CandidateQuerySet":
+        return self.filter(deleted_at__isnull=True)
+
+
 class Candidate(models.Model):
     public_id = models.CharField(max_length=PUBLIC_ID_LENGTH, unique=True, editable=False)
     full_name = models.CharField(max_length=100)
-    phone = models.CharField(max_length=16, unique=True, help_text="E.164 format, e.g. +919876543210")
+    phone = models.CharField(max_length=16, help_text="E.164 format, e.g. +919876543210")
     email = models.EmailField(max_length=254)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    objects = CandidateQuerySet.as_manager()
 
     class Meta:
         ordering = ["-created_at", "-id"]
         constraints = [
-            models.UniqueConstraint(Lower("email"), name="candidate_email_ci_unique"),
+            models.UniqueConstraint(
+                fields=["phone"],
+                condition=Q(deleted_at__isnull=True),
+                name="candidate_phone_unique_active",
+            ),
+            models.UniqueConstraint(
+                Lower("email"),
+                condition=Q(deleted_at__isnull=True),
+                name="candidate_email_ci_unique_active",
+            ),
         ]
 
     def __str__(self) -> str:

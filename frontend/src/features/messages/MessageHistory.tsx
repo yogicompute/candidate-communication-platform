@@ -1,4 +1,5 @@
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined';
+import Divider from '@mui/material/Divider';
 import Stack from '@mui/material/Stack';
 import EmptyState from '@/components/EmptyState';
 import MessageHistoryItem from '@/features/messages/MessageHistoryItem';
@@ -15,8 +16,8 @@ export default function MessageHistory({ messages, retryingId, onRetry }: Messag
     return (
       <EmptyState
         icon={<ForumOutlinedIcon />}
-        title="No messages yet"
-        description="Messages you send to this candidate will appear here."
+        title="No communication history"
+        description="Messages sent to this candidate will appear here."
       />
     );
   }
@@ -24,7 +25,11 @@ export default function MessageHistory({ messages, retryingId, onRetry }: Messag
   const attemptById = new Map(messages.map((message) => [message.id, message.attemptNumber]));
 
   return (
-    <Stack component="ol" spacing={2} sx={{ listStyle: 'none', m: 0, p: 0 }}>
+    <Stack
+      component="ol"
+      divider={<Divider component="li" aria-hidden />}
+      sx={{ listStyle: 'none', m: 0, p: 0 }}
+    >
       {messages.map((message) => (
         <MessageHistoryItem
           key={message.id}

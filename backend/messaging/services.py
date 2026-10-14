@@ -2,12 +2,14 @@ import logging
 import uuid
 from dataclasses import dataclass
 
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from candidates.models import Candidate
 from candidates.services import get_candidate
-from messaging.failures import failure_message
-from messaging.models import Message, MessageStatus
+from config.exceptions import ApiError
+from messaging.failures import failure_message, is_retryable
+from messaging.models import MAX_ATTEMPTS, Message, MessageStatus
 from messaging.status import apply_status
 from providers.base import MessagingProvider
 from providers.registry import get_provider
@@ -15,6 +17,7 @@ from providers.registry import get_provider
 logger = logging.getLogger(__name__)
 
 HISTORY_LIMIT = 200
+ALREADY_RETRIED = "This message has already been retried."
 
 
 @dataclass
@@ -81,7 +84,9 @@ def send_message(candidate_public_id: str, body: str) -> Message:
 def send_bulk(candidate_public_ids: list[str], body: str) -> tuple[str, list[RecipientResult]]:
     """Send one independent message per recipient. A failure for one never stops the others."""
     bulk_request_id = f"bulk_{uuid.uuid4().hex}"
-    candidates = {c.public_id: c for c in Candidate.objects.filter(public_id__in=candidate_public_ids)}
+    candidates = {
+        c.public_id: c for c in Candidate.objects.active().filter(public_id__in=candidate_public_ids)
+    }
     results: list[RecipientResult] = []
 
     for public_id in candidate_public_ids:
@@ -106,3 +111,43 @@ def send_bulk(candidate_public_ids: list[str], body: str) -> tuple[str, list[Rec
         results.append(RecipientResult(public_id, candidate.full_name, message, error))
 
     return bulk_request_id, results
+
+
+def _retry_block_reason(message: Message) -> str | None:
+    if message.candidate.deleted_at is not None:
+        return "This candidate was deleted, so the message can't be retried."
+    if message.status != MessageStatus.FAILED:
+        return "Only failed messages can be retried."
+    if not is_retryable(message.failure_code):
+        return "This failure is permanent, so the message can't be retried."
+    if message.retry_attempt is not None:
+        return ALREADY_RETRIED
+    if message.attempt_number >= MAX_ATTEMPTS:
+        return "This message has reached the retry limit."
+    return None
+
+
+def retry_message(message_public_id: str) -> Message:
+    """Create the next attempt for one failed message. Only that message's candidate is contacted."""
+    with transaction.atomic():
+        original = (
+            Message.objects.select_for_update()
+            .select_related("candidate")
+            .filter(public_id=message_public_id)
+            .first()
+        )
+        if original is None:
+            raise ApiError("This message no longer exists.", code="not_found", status_code=404)
+        reason = _retry_block_reason(original)
+        if reason:
+            raise ApiError(reason, code="not_retryable", status_code=409)
+
+    try:
+        return create_attempt(
+            original.candidate,
+            original.body,
+            bulk_request_id=original.bulk_request_id,
+            retry_of=original,
+        )
+    except IntegrityError:
+        raise ApiError(ALREADY_RETRIED, code="not_retryable", status_code=409) from None

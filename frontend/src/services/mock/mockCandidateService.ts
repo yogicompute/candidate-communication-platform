@@ -3,7 +3,12 @@ import type { CandidateService } from '@/services/candidateService';
 import { getDb, saveDb, simulateNetwork, type CandidateRecord } from '@/services/mock/mockDb';
 import { latestMessageFor, syncMessageStatuses } from '@/services/mock/mockMessageService';
 import type { FieldErrors } from '@/types/api';
-import type { Candidate, CandidateInput, CandidateStatusFilter } from '@/types/candidate';
+import type {
+  Candidate,
+  CandidateInput,
+  CandidateListParams,
+  CandidateStatusFilter,
+} from '@/types/candidate';
 import { hasErrors, normalizeCandidateInput, validateCandidateInput } from '@/utils/validation';
 
 const ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -48,13 +53,35 @@ function matchesStatus(candidate: Candidate, status?: CandidateStatusFilter): bo
   return candidate.lastMessageStatus === status;
 }
 
+function includesText(value: string, filter?: string): boolean {
+  const term = filter?.trim().toLowerCase();
+  return !term || value.toLowerCase().includes(term);
+}
+
+function matchesFilters(candidate: Candidate, params: CandidateListParams): boolean {
+  const phoneDigits = (params.phone ?? '').replace(/\D/g, '');
+  const lastAt = candidate.lastMessageAt ? Date.parse(candidate.lastMessageAt) : null;
+  if (!includesText(candidate.fullName, params.name) || !includesText(candidate.id, params.candidateId)) {
+    return false;
+  }
+  if (phoneDigits && !candidate.phone.includes(phoneDigits)) return false;
+  if (params.lastMessageAfter && (lastAt === null || lastAt < Date.parse(params.lastMessageAfter))) {
+    return false;
+  }
+  if (params.lastMessageBefore && (lastAt === null || lastAt >= Date.parse(params.lastMessageBefore))) {
+    return false;
+  }
+  return matchesSearch(candidate, params.search ?? '') && matchesStatus(candidate, params.status);
+}
+
 export const mockCandidateService: CandidateService = {
-  async list({ search = '', status, page, pageSize }) {
+  async list(params) {
+    const { page, pageSize } = params;
     await simulateNetwork();
     syncMessageStatuses();
     const matches = getDb()
       .candidates.map(toCandidate)
-      .filter((c) => matchesSearch(c, search) && matchesStatus(c, status))
+      .filter((c) => matchesFilters(c, params))
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
     const start = (page - 1) * pageSize;
     return {
@@ -103,5 +130,16 @@ export const mockCandidateService: CandidateService = {
     db.candidates.push(record);
     saveDb();
     return toCandidate(record);
+  },
+
+  async remove(ids) {
+    await simulateNetwork();
+    const requested = Array.from(new Set(ids.map((id) => id.toUpperCase())));
+    const db = getDb();
+    const existing = new Set(db.candidates.map((c) => c.id));
+    const deletedIds = requested.filter((id) => existing.has(id));
+    db.candidates = db.candidates.filter((c) => !deletedIds.includes(c.id));
+    saveDb();
+    return { deletedIds, notFoundIds: requested.filter((id) => !existing.has(id)) };
   },
 };

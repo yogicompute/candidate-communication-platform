@@ -15,7 +15,19 @@ const FIELD_NAMES: Record<string, string> = {
   full_name: 'fullName',
   candidate_id: 'candidateId',
   candidate_ids: 'candidateIds',
+  last_message_after: 'lastMessageAfter',
+  last_message_before: 'lastMessageBefore',
 };
+
+const LIST_QUERY_FIELDS = [
+  ['search', 'search'],
+  ['name', 'name'],
+  ['phone', 'phone'],
+  ['candidateId', 'candidate_id'],
+  ['status', 'status'],
+  ['lastMessageAfter', 'last_message_after'],
+  ['lastMessageBefore', 'last_message_before'],
+] as const satisfies ReadonlyArray<readonly [keyof CandidateListParams, string]>;
 
 export function toCandidate(dto: CandidateDto): Candidate {
   return {
@@ -44,9 +56,10 @@ export function toPaginated<TDto, T>(dto: PaginatedDto<TDto>, mapItem: (item: TD
 
 export function toCandidateListQuery(params: CandidateListParams): string {
   const query = new URLSearchParams();
-  const search = params.search?.trim();
-  if (search) query.set('search', search);
-  if (params.status) query.set('status', params.status);
+  for (const [field, name] of LIST_QUERY_FIELDS) {
+    const value = params[field]?.trim();
+    if (value) query.set(name, value);
+  }
   query.set('page', String(params.page));
   query.set('page_size', String(params.pageSize));
   return query.toString();

@@ -20,7 +20,17 @@ export type CandidateStatusFilter = MessageStatus | 'none';
 
 export interface CandidateListParams {
   search?: string;
+  name?: string;
+  phone?: string;
+  candidateId?: string;
   status?: CandidateStatusFilter;
+  lastMessageAfter?: string;
+  lastMessageBefore?: string;
   page: number;
   pageSize: number;
+}
+
+export interface DeleteCandidatesResult {
+  deletedIds: string[];
+  notFoundIds: string[];
 }

@@ -7,6 +7,7 @@ INDIAN_MOBILE_PATTERN = re.compile(r"^\+91[6-9]\d{9}$")
 PHONE_ERROR = "Enter a valid mobile number, e.g. 9876543210 or +91 9876543210."
 
 STATUS_FILTERS = ("pending", "sent", "delivered", "read", "failed", "none")
+MAX_BULK_DELETE = 100
 
 
 def normalize_phone(raw: str) -> str:
@@ -81,6 +82,35 @@ class CandidateCreateSerializer(serializers.Serializer):
 
 class CandidateListQuerySerializer(serializers.Serializer):
     search = serializers.CharField(required=False, allow_blank=True, max_length=100, default="")
+    name = serializers.CharField(required=False, allow_blank=True, max_length=100, default="")
+    phone = serializers.CharField(required=False, allow_blank=True, max_length=20, default="")
+    candidate_id = serializers.CharField(required=False, allow_blank=True, max_length=20, default="")
     status = serializers.ChoiceField(required=False, choices=STATUS_FILTERS)
+    last_message_after = serializers.DateTimeField(required=False)
+    last_message_before = serializers.DateTimeField(required=False)
     page = serializers.IntegerField(required=False, min_value=1, default=1)
     page_size = serializers.IntegerField(required=False, min_value=1, max_value=100, default=10)
+
+    def validate(self, attrs: dict) -> dict:
+        after, before = attrs.get("last_message_after"), attrs.get("last_message_before")
+        if after and before and after >= before:
+            raise serializers.ValidationError(
+                {"last_message_before": "The end date must be after the start date."}
+            )
+        return attrs
+
+
+class CandidateBulkDeleteSerializer(serializers.Serializer):
+    candidate_ids = serializers.ListField(
+        child=serializers.CharField(max_length=20),
+        allow_empty=False,
+        max_length=MAX_BULK_DELETE,
+        error_messages={
+            "required": "Select at least one candidate.",
+            "empty": "Select at least one candidate.",
+            "max_length": f"You can delete up to {MAX_BULK_DELETE} candidates at once.",
+        },
+    )
+
+    def validate_candidate_ids(self, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(item.strip().upper() for item in value))

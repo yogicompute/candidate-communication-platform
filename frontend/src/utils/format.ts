@@ -14,10 +14,17 @@ export function formatDate(value: DateInput): string {
   return `${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${date.getFullYear()}`;
 }
 
+export function formatTime(value: DateInput): string {
+  const date = toDate(value);
+  if (!date) return 'NA';
+  const hours = date.getHours();
+  return `${hours % 12 || 12}:${pad(date.getMinutes())} ${hours >= 12 ? 'PM' : 'AM'}`;
+}
+
 export function formatDateTime(value: DateInput): string {
   const date = toDate(value);
   if (!date) return 'NA';
-  return `${formatDate(date)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${formatDate(date)} | ${formatTime(date)}`;
 }
 
 export function formatPhone(e164: string): string {

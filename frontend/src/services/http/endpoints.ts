@@ -5,6 +5,7 @@ const encode = encodeURIComponent;
 export const endpoints = {
   health: () => `${API_PREFIX}/health/`,
   candidates: () => `${API_PREFIX}/candidates/`,
+  candidatesBulkDelete: () => `${API_PREFIX}/candidates/bulk-delete/`,
   candidate: (id: string) => `${API_PREFIX}/candidates/${encode(id)}/`,
   candidateMessages: (id: string) => `${API_PREFIX}/candidates/${encode(id)}/messages/`,
   messages: () => `${API_PREFIX}/messages/`,

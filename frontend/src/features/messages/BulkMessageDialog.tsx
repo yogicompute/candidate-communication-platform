@@ -1,7 +1,6 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import NextLink from 'next/link';
 import SendIcon from '@mui/icons-material/Send';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -12,7 +11,6 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import LinearProgress from '@mui/material/LinearProgress';
-import Link from '@mui/material/Link';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import StatusChip from '@/components/StatusChip';
@@ -40,7 +38,7 @@ function RecipientResult({ item }: { item: BulkRecipientResult }) {
   const name = item.candidateName ?? `Unknown candidate (${item.candidateId})`;
   const detail = item.accepted
     ? `Provider reference ${item.message?.providerReference ?? 'not available'}`
-    : [item.error, item.message?.canRetry ? 'You can retry from their page.' : null]
+    : [item.error, item.message?.canRetry ? 'You can retry from their communication history.' : null]
         .filter(Boolean)
         .join(' ');
 
@@ -59,13 +57,7 @@ function RecipientResult({ item }: { item: BulkRecipientResult }) {
     >
       <Box sx={{ minWidth: 0 }}>
         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-          {item.candidateName ? (
-            <Link component={NextLink} href={`/candidates/${item.candidateId}`} underline="hover">
-              {name}
-            </Link>
-          ) : (
-            name
-          )}
+          {name}
         </Typography>
         <Typography
           variant="caption"
@@ -226,7 +218,7 @@ export default function BulkMessageDialog({
                 ))}
               </Box>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                Delivery and read updates appear on each candidate&apos;s page.
+                Delivery and read updates appear in each candidate&apos;s communication history.
               </Typography>
             </>
           )}

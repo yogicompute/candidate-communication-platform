@@ -7,7 +7,7 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import StatusChip from '@/components/StatusChip';
 import type { Message } from '@/types/message';
-import { formatDateTime } from '@/utils/format';
+import { formatDate, formatDateTime, formatTime } from '@/utils/format';
 
 const TIMESTAMP_FIELDS = [
   ['sentAt', 'Sent'],
@@ -20,6 +20,11 @@ function retryNote(message: Message, retriedAttempt: number | null): string {
   if (retriedAttempt) return `Retried as attempt ${retriedAttempt}.`;
   if (!message.failure?.retryable) return "This is a permanent failure, so it can't be retried.";
   return 'The retry limit for this message has been reached.';
+}
+
+function timelineEntry(label: string, value: string, createdAt: string): string {
+  const sameDay = formatDate(value) === formatDate(createdAt);
+  return `${label} ${sameDay ? formatTime(value) : formatDateTime(value)}`;
 }
 
 interface MessageHistoryItemProps {
@@ -38,21 +43,24 @@ export default function MessageHistoryItem({
   onRetry,
 }: MessageHistoryItemProps) {
   const { failure } = message;
-  const timeline = TIMESTAMP_FIELDS.filter(([field]) => message[field]).map(
-    ([field, label]) => `${label} ${formatDateTime(message[field])}`,
-  );
+  const timeline = TIMESTAMP_FIELDS.flatMap(([field, label]) => {
+    const value = message[field];
+    return value ? [timelineEntry(label, value, message.createdAt)] : [];
+  });
 
   return (
-    <Box component="li" sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 2 }}>
+    <Box component="li" sx={{ py: 2 }}>
       <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center', mb: 1 }}>
-        <StatusChip status={message.status} />
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          {formatDateTime(message.createdAt)}
+        </Typography>
         {message.attemptNumber > 1 && (
           <Chip size="small" variant="outlined" label={`Retry · attempt ${message.attemptNumber}`} />
         )}
         {message.bulkRequestId && <Chip size="small" variant="outlined" label="Bulk message" />}
-        <Typography variant="caption" sx={{ color: 'text.secondary', ml: 'auto' }}>
-          {formatDateTime(message.createdAt)}
-        </Typography>
+        <Box sx={{ ml: 'auto' }}>
+          <StatusChip status={message.status} />
+        </Box>
       </Stack>
 
       <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>

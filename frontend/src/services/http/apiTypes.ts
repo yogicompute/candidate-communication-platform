@@ -16,6 +16,15 @@ export interface CandidateInputDto {
   email: string;
 }
 
+export interface CandidateBulkDeleteDto {
+  candidate_ids: string[];
+}
+
+export interface CandidateBulkDeleteResultDto {
+  deleted_ids: string[];
+  not_found_ids: string[];
+}
+
 export interface PaginatedDto<T> {
   count: number;
   page: number;
