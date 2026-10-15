@@ -1,21 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import DeleteIcon from '@mui/icons-material/Delete';
+import CloseIcon from '@mui/icons-material/Close';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
-import Chip from '@mui/material/Chip';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
-import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
+import IconButton from '@mui/material/IconButton';
 import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
 import { getErrorMessage } from '@/services/apiError';
 import { candidateService } from '@/services/candidateService';
 import type { DeleteCandidatesResult } from '@/types/candidate';
-
-const PREVIEW_LIMIT = 6;
 
 interface DeleteCandidatesDialogProps {
   open: boolean;
@@ -30,10 +28,13 @@ export default function DeleteCandidatesDialog({
   onClose,
   onDeleted,
 }: DeleteCandidatesDialogProps) {
+  // Snapshot per opening (the parent remounts with a new key) so the copy doesn't change while the
+  // dialog animates closed after the selection is cleared.
+  const [targets] = useState(candidates);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const count = candidates.length;
-  const countLabel = `${count} candidate${count === 1 ? '' : 's'}`;
+  const count = targets.length;
+  const single = count === 1;
 
   function handleClose() {
     if (deleting) return;
@@ -46,7 +47,7 @@ export default function DeleteCandidatesDialog({
     setDeleting(true);
     setError(null);
     try {
-      onDeleted(await candidateService.remove(candidates.map((candidate) => candidate.id)));
+      onDeleted(await candidateService.remove(targets.map((candidate) => candidate.id)));
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -55,37 +56,38 @@ export default function DeleteCandidatesDialog({
   }
 
   return (
-    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xs" aria-labelledby="delete-candidates-title">
-      <DialogTitle id="delete-candidates-title">Delete {countLabel}?</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2}>
+    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm" aria-labelledby="delete-candidates-title">
+      <DialogTitle id="delete-candidates-title" sx={{ pr: 7 }}>
+        Delete Candidate
+      </DialogTitle>
+      <IconButton
+        onClick={handleClose}
+        disabled={deleting}
+        aria-label="Close delete candidate"
+        sx={{ position: 'absolute', right: 12, top: 12 }}
+      >
+        <CloseIcon />
+      </IconButton>
+      <DialogContent sx={{ pb: 4 }}>
+        <Stack spacing={1}>
           {error && <Alert severity="error">{error}</Alert>}
-          <DialogContentText>
-            They will be removed from your candidate list and can no longer be messaged. Messages
-            already sent are kept for your records.
-          </DialogContentText>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-            {candidates.slice(0, PREVIEW_LIMIT).map((candidate) => (
-              <Chip key={candidate.id} size="small" label={candidate.fullName} />
-            ))}
-            {count > PREVIEW_LIMIT && (
-              <Chip size="small" variant="outlined" label={`+${count - PREVIEW_LIMIT} more`} />
-            )}
-          </Stack>
+          <Typography variant="body1" sx={{ fontWeight: 500 }}>
+            {single
+              ? 'Are you sure you want to delete this Candidate?'
+              : `Are you sure you want to delete ${count} Candidates?`}
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            This action cannot be undone, and you&apos;ll lose all communication history with{' '}
+            {single ? `${targets[0]?.fullName}.` : 'these candidates.'}
+          </Typography>
         </Stack>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={handleClose} disabled={deleting}>
+      <DialogActions sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
+        <Button variant="outlined" onClick={handleClose} disabled={deleting}>
           Cancel
         </Button>
-        <Button
-          color="error"
-          variant="contained"
-          startIcon={<DeleteIcon />}
-          onClick={handleDelete}
-          loading={deleting}
-        >
-          Delete
+        <Button color="error" variant="contained" onClick={handleDelete} loading={deleting}>
+          {single ? 'Delete candidate' : `Delete ${count} candidates`}
         </Button>
       </DialogActions>
     </Dialog>

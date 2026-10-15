@@ -17,7 +17,7 @@ export default function EmptyState({ title, description, icon, action }: EmptySt
       <Box sx={{ color: 'text.disabled', display: 'flex', '& svg': { fontSize: 48 } }}>
         {icon ?? <InboxOutlinedIcon />}
       </Box>
-      <Typography variant="h2" component="p">
+      <Typography variant="subtitle1" component="p" sx={{ fontWeight: 700 }}>
         {title}
       </Typography>
       {description && (

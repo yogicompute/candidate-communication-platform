@@ -1,4 +1,4 @@
-import type { FailureCode, MessageStatus } from '@/types/message';
+import type { FailureCode, MessageStatus, ScheduledStatus } from '@/types/message';
 
 export interface CandidateDto {
   id: string;
@@ -86,6 +86,61 @@ export interface BulkSendResultDto {
   accepted_count: number;
   failed_count: number;
   results: BulkRecipientResultDto[];
+}
+
+export interface ScheduledMessageDto {
+  id: string;
+  candidate_id: string;
+  body: string;
+  scheduled_for: string;
+  status: ScheduledStatus;
+  group_id: string | null;
+  message_id: string | null;
+  can_cancel: boolean;
+  created_at: string;
+  cancelled_at: string | null;
+}
+
+export interface ScheduledMessageListDto {
+  results: ScheduledMessageDto[];
+}
+
+export interface ScheduleDto {
+  candidate_ids: string[];
+  body: string;
+  scheduled_for: string;
+}
+
+export interface ScheduleResultDto {
+  group_id: string | null;
+  scheduled_for: string;
+  total: number;
+  accepted_count: number;
+  failed_count: number;
+  results: {
+    candidate_id: string;
+    candidate_name: string | null;
+    accepted: boolean;
+    scheduled_message: ScheduledMessageDto | null;
+    error: string | null;
+  }[];
+}
+
+export interface MessageTemplateDto {
+  id: string;
+  name: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MessageTemplateListDto {
+  results: MessageTemplateDto[];
+}
+
+export interface TemplateInputDto {
+  name: string;
+  body: string;
 }
 
 export interface ApiErrorDto {

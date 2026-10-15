@@ -9,7 +9,16 @@ from candidates.models import Candidate
 from candidates.services import get_candidate
 from config.exceptions import ApiError
 from messaging.failures import failure_message, is_retryable
-from messaging.models import MAX_ATTEMPTS, Message, MessageStatus
+from messaging.models import (
+    MAX_ATTEMPTS,
+    MESSAGE_MAX_LENGTH,
+    Message,
+    MessageStatus,
+    MessageTemplate,
+    ScheduledMessage,
+    ScheduledStatus,
+)
+from messaging.placeholders import render
 from messaging.status import apply_status
 from providers.base import MessagingProvider
 from providers.registry import get_provider
@@ -77,8 +86,27 @@ def list_candidate_messages(candidate_public_id: str) -> list[Message]:
     return list(queryset[:HISTORY_LIMIT])
 
 
+def _check_rendered_length(body: str, candidates: list[Candidate]) -> None:
+    """Names can push a valid template over the limit; reject before anything is sent."""
+    for candidate in candidates:
+        length = len(render(body, candidate.full_name))
+        if length > MESSAGE_MAX_LENGTH:
+            raise ApiError(
+                "Please fix the message.",
+                code="validation_error",
+                fields={
+                    "body": (
+                        f"With names filled in, this message is {length} characters for "
+                        f"{candidate.full_name}. Keep it to {MESSAGE_MAX_LENGTH}."
+                    )
+                },
+            )
+
+
 def send_message(candidate_public_id: str, body: str) -> Message:
-    return create_attempt(get_candidate(candidate_public_id), body)
+    candidate = get_candidate(candidate_public_id)
+    _check_rendered_length(body, [candidate])
+    return create_attempt(candidate, render(body, candidate.full_name))
 
 
 def send_bulk(candidate_public_ids: list[str], body: str) -> tuple[str, list[RecipientResult]]:
@@ -87,6 +115,7 @@ def send_bulk(candidate_public_ids: list[str], body: str) -> tuple[str, list[Rec
     candidates = {
         c.public_id: c for c in Candidate.objects.active().filter(public_id__in=candidate_public_ids)
     }
+    _check_rendered_length(body, list(candidates.values()))
     results: list[RecipientResult] = []
 
     for public_id in candidate_public_ids:
@@ -95,7 +124,9 @@ def send_bulk(candidate_public_ids: list[str], body: str) -> tuple[str, list[Rec
             results.append(RecipientResult(public_id, None, None, "This candidate no longer exists."))
             continue
         try:
-            message = create_attempt(candidate, body, bulk_request_id=bulk_request_id)
+            message = create_attempt(
+                candidate, render(body, candidate.full_name), bulk_request_id=bulk_request_id
+            )
         except Exception:
             logger.exception("Bulk send %s failed for %s", bulk_request_id, public_id)
             results.append(
@@ -111,6 +142,68 @@ def send_bulk(candidate_public_ids: list[str], body: str) -> tuple[str, list[Rec
         results.append(RecipientResult(public_id, candidate.full_name, message, error))
 
     return bulk_request_id, results
+
+
+@dataclass
+class ScheduleResult:
+    candidate_id: str
+    candidate_name: str | None
+    scheduled: ScheduledMessage | None
+    error: str | None
+
+
+def schedule_messages(
+    candidate_public_ids: list[str], body: str, scheduled_for
+) -> tuple[str | None, list[ScheduleResult]]:
+    """Store one ScheduledMessage per recipient; run_scheduler sends them when due."""
+    candidates = {
+        c.public_id: c for c in Candidate.objects.active().filter(public_id__in=candidate_public_ids)
+    }
+    _check_rendered_length(body, list(candidates.values()))
+    # Several recipients share a group id, which becomes the bulk_request_id of the sent messages.
+    group_id = f"bulk_{uuid.uuid4().hex}" if len(candidate_public_ids) > 1 else None
+    results: list[ScheduleResult] = []
+    with transaction.atomic():
+        for public_id in candidate_public_ids:
+            candidate = candidates.get(public_id)
+            if candidate is None:
+                results.append(ScheduleResult(public_id, None, None, "This candidate no longer exists."))
+                continue
+            item = ScheduledMessage.objects.create(
+                candidate=candidate, body=body, scheduled_for=scheduled_for, group_id=group_id
+            )
+            results.append(ScheduleResult(public_id, candidate.full_name, item, None))
+    return group_id, results
+
+
+def list_candidate_scheduled(candidate_public_id: str) -> list[ScheduledMessage]:
+    """Upcoming and cancelled items. Sent ones appear in the history as their Message instead."""
+    candidate = get_candidate(candidate_public_id)
+    return list(
+        ScheduledMessage.objects.filter(candidate=candidate)
+        .exclude(status=ScheduledStatus.SENT)
+        .select_related("candidate", "message")
+        .order_by("scheduled_for", "id")[:HISTORY_LIMIT]
+    )
+
+
+def cancel_scheduled(public_id: str) -> ScheduledMessage:
+    now = timezone.now()
+    # Conditional update: the scheduler may be claiming the same row right now.
+    cancelled = ScheduledMessage.objects.filter(
+        public_id=public_id, status=ScheduledStatus.SCHEDULED
+    ).update(status=ScheduledStatus.CANCELLED, cancelled_at=now, updated_at=now)
+    item = ScheduledMessage.objects.select_related("candidate", "message").filter(public_id=public_id).first()
+    if item is None:
+        raise ApiError("This scheduled message no longer exists.", code="not_found", status_code=404)
+    if not cancelled:
+        reason = {
+            ScheduledStatus.SENDING: "This message is being sent right now, so it can't be cancelled.",
+            ScheduledStatus.SENT: "This message was already sent.",
+            ScheduledStatus.CANCELLED: "This message was already cancelled.",
+        }[item.status]
+        raise ApiError(reason, code="not_cancellable", status_code=409)
+    return item
 
 
 def _retry_block_reason(message: Message) -> str | None:
@@ -151,3 +244,37 @@ def retry_message(message_public_id: str) -> Message:
         )
     except IntegrityError:
         raise ApiError(ALREADY_RETRIED, code="not_retryable", status_code=409) from None
+
+
+DUPLICATE_TEMPLATE = "A template with this name already exists."
+
+
+def list_templates() -> list[MessageTemplate]:
+    return list(MessageTemplate.objects.all())
+
+
+def get_template(public_id: str) -> MessageTemplate:
+    template = MessageTemplate.objects.filter(public_id=public_id).first()
+    if template is None:
+        raise ApiError("This template no longer exists.", code="not_found", status_code=404)
+    return template
+
+
+def save_template(template: MessageTemplate, *, name: str, body: str) -> MessageTemplate:
+    """Create or update a template. Names are unique regardless of case."""
+    duplicate = MessageTemplate.objects.filter(name__iexact=name).exclude(pk=template.pk).exists()
+    if not duplicate:
+        template.name, template.body = name, body
+        try:
+            with transaction.atomic():
+                template.save()
+            return template
+        except IntegrityError:
+            pass  # Another request saved the same name in between.
+    raise ApiError(
+        DUPLICATE_TEMPLATE, code="duplicate_template", status_code=409, fields={"name": DUPLICATE_TEMPLATE}
+    )
+
+
+def delete_template(public_id: str) -> None:
+    get_template(public_id).delete()

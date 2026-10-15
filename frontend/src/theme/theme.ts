@@ -22,6 +22,16 @@ const theme = createTheme({
     button: { fontWeight: 500, letterSpacing: '0.04em' },
   },
   components: {
+    // Figma dims and blurs the page behind dialogs and sheets; popover backdrops stay invisible.
+    MuiBackdrop: {
+      styleOverrides: {
+        root: {
+          variants: [
+            { props: { invisible: false }, style: { backdropFilter: 'blur(2px)' } },
+          ],
+        },
+      },
+    },
     MuiButton: {
       defaultProps: { disableElevation: true },
     },

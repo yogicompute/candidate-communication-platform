@@ -1,6 +1,6 @@
-import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined';
 import Divider from '@mui/material/Divider';
 import Stack from '@mui/material/Stack';
+import EmptyIllustration from '@/components/EmptyIllustration';
 import EmptyState from '@/components/EmptyState';
 import MessageHistoryItem from '@/features/messages/MessageHistoryItem';
 import type { Message } from '@/types/message';
@@ -9,15 +9,23 @@ interface MessageHistoryProps {
   messages: Message[];
   retryingId: string | null;
   onRetry: (message: Message) => void;
+  /** Off when scheduled messages are listed above, so "no history" isn't shown next to them. */
+  showEmptyState?: boolean;
 }
 
-export default function MessageHistory({ messages, retryingId, onRetry }: MessageHistoryProps) {
+export default function MessageHistory({
+  messages,
+  retryingId,
+  onRetry,
+  showEmptyState = true,
+}: MessageHistoryProps) {
   if (messages.length === 0) {
+    if (!showEmptyState) return null;
     return (
       <EmptyState
-        icon={<ForumOutlinedIcon />}
+        icon={<EmptyIllustration />}
         title="No communication history"
-        description="Messages sent to this candidate will appear here."
+        description="You have not communicated with this candidate yet. When you send them a message, it will appear here."
       />
     );
   }

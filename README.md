@@ -17,7 +17,8 @@ Browser ──▶ Next.js ──HTTP /api/v1──▶ Django API ──▶ provi
 ```
 
 - `candidates/` — candidate CRUD, search, column filters, soft delete.
-- `messaging/` — message attempts, status rules, idempotent send/bulk/retry, webhook processing.
+- `messaging/` — message attempts, status rules, idempotent send/bulk/retry, webhook processing,
+  templates with `{{candidate_name}}` / `{{first_name}}` placeholders, scheduled messages.
 - `providers/` — provider interface, dummy provider adapter, and the dummy provider server.
 
 ## Run locally
@@ -38,6 +39,12 @@ python manage.py runserver 8000
 ```bash
 cd backend && source .venv/bin/activate
 python -m providers.dummy_server
+```
+
+**Scheduler** (terminal 4) — sends scheduled messages when due and purges old idempotency records
+```bash
+cd backend && source .venv/bin/activate
+python manage.py run_scheduler            # add --once for a single pass
 ```
 
 **Frontend** (terminal 3)
@@ -74,8 +81,8 @@ curl -X POST http://127.0.0.1:8100/control -H "Authorization: Bearer local-dummy
 
 **Backend + database → Render** (`render.yaml` blueprint). **Frontend → Vercel.**
 
-On Render the dummy provider runs as a second process inside the API service (`backend/bin/start.sh`),
-listening only on localhost; callbacks go to the API over localhost and are still HMAC-signed. This keeps
+On Render the dummy provider and the message scheduler run as extra processes inside the API service
+(`backend/bin/start.sh`). The provider listens only on localhost; callbacks go to the API over localhost and are still HMAC-signed. This keeps
 the free tier to one service and means the provider is never asleep when the API is awake.
 
 ### 1. Backend on Render
@@ -113,6 +120,8 @@ Secrets (`DJANGO_SECRET_KEY`, `DUMMY_PROVIDER_API_KEY`, `PROVIDER_WEBHOOK_SECRET
 - Render free web services sleep after ~15 minutes idle; the first request then takes ~50 s.
 - Render free PostgreSQL databases expire after 30 days. Use a paid plan for anything long-lived.
 - The dummy provider keeps pending callbacks in memory; a restart drops callbacks not yet delivered.
+- Nothing runs while the service sleeps, including the scheduler: a scheduled message that falls due
+  then is sent within ~30 s of the service waking up (the next request), not at its exact time.
 
 ## Security notes
 - There is **no authentication**: anyone with the URL can view, add, message and delete candidates.

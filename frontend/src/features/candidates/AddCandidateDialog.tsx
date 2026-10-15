@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, type ChangeEvent, type FormEvent } from 'react';
+import CloseIcon from '@mui/icons-material/Close';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
+import IconButton from '@mui/material/IconButton';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import { ApiError, getErrorMessage } from '@/services/apiError';
@@ -55,6 +57,8 @@ export default function AddCandidateDialog({ open, onClose, onCreated }: AddCand
       setErrors((prev) => ({ ...prev, [field]: undefined }));
     };
 
+  const complete = Boolean(values.fullName.trim() && values.phone.trim() && values.email.trim());
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitting) return;
@@ -92,12 +96,22 @@ export default function AddCandidateDialog({ open, onClose, onCreated }: AddCand
       aria-labelledby="add-candidate-title"
     >
       <form onSubmit={handleSubmit} noValidate>
-        <DialogTitle id="add-candidate-title">Add candidate</DialogTitle>
-        <DialogContent>
+        <DialogTitle id="add-candidate-title" sx={{ pr: 7 }}>
+          Add Candidate
+        </DialogTitle>
+        <IconButton
+          onClick={handleClose}
+          disabled={submitting}
+          aria-label="Close add candidate"
+          sx={{ position: 'absolute', right: 12, top: 12 }}
+        >
+          <CloseIcon />
+        </IconButton>
+        <DialogContent sx={{ pb: 3 }}>
           <Stack spacing={2} sx={{ pt: 1 }}>
             {formError && <Alert severity="error">{formError}</Alert>}
             <TextField
-              label="Full name"
+              label="Candidate Name"
               value={values.fullName}
               onChange={handleChange('fullName')}
               error={Boolean(errors.fullName)}
@@ -108,7 +122,7 @@ export default function AddCandidateDialog({ open, onClose, onCreated }: AddCand
               slotProps={{ htmlInput: { maxLength: NAME_MAX_LENGTH } }}
             />
             <TextField
-              label="Mobile number"
+              label="Mobile Number"
               type="tel"
               value={values.phone}
               onChange={handleChange('phone')}
@@ -131,11 +145,11 @@ export default function AddCandidateDialog({ open, onClose, onCreated }: AddCand
             />
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={handleClose} disabled={submitting}>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
+          <Button variant="outlined" onClick={handleClose} disabled={submitting}>
             Cancel
           </Button>
-          <Button type="submit" variant="contained" loading={submitting}>
+          <Button type="submit" variant="contained" loading={submitting} disabled={!complete}>
             Add candidate
           </Button>
         </DialogActions>

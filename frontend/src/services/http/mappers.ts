@@ -5,11 +5,15 @@ import type {
   CandidateDto,
   CandidateInputDto,
   MessageDto,
+  MessageTemplateDto,
   PaginatedDto,
+  ScheduledMessageDto,
+  ScheduleResultDto,
 } from '@/services/http/apiTypes';
 import type { Paginated } from '@/types/api';
 import type { Candidate, CandidateInput, CandidateListParams } from '@/types/candidate';
-import type { BulkSendResult, Message } from '@/types/message';
+import type { BulkSendResult, Message, ScheduledMessage, ScheduleResult } from '@/types/message';
+import type { MessageTemplate } from '@/types/template';
 
 const FIELD_NAMES: Record<string, string> = {
   full_name: 'fullName',
@@ -17,6 +21,7 @@ const FIELD_NAMES: Record<string, string> = {
   candidate_ids: 'candidateIds',
   last_message_after: 'lastMessageAfter',
   last_message_before: 'lastMessageBefore',
+  scheduled_for: 'scheduledFor',
 };
 
 const LIST_QUERY_FIELDS = [
@@ -101,6 +106,42 @@ export function toBulkSendResult(dto: BulkSendResultDto): BulkSendResult {
       error: item.error,
     })),
   };
+}
+
+export function toScheduledMessage(dto: ScheduledMessageDto): ScheduledMessage {
+  return {
+    id: dto.id,
+    candidateId: dto.candidate_id,
+    body: dto.body,
+    scheduledFor: dto.scheduled_for,
+    status: dto.status,
+    groupId: dto.group_id,
+    messageId: dto.message_id,
+    canCancel: dto.can_cancel,
+    createdAt: dto.created_at,
+    cancelledAt: dto.cancelled_at,
+  };
+}
+
+export function toScheduleResult(dto: ScheduleResultDto): ScheduleResult {
+  return {
+    groupId: dto.group_id,
+    scheduledFor: dto.scheduled_for,
+    total: dto.total,
+    acceptedCount: dto.accepted_count,
+    failedCount: dto.failed_count,
+    results: dto.results.map((item) => ({
+      candidateId: item.candidate_id,
+      candidateName: item.candidate_name,
+      accepted: item.accepted,
+      scheduledMessage: item.scheduled_message ? toScheduledMessage(item.scheduled_message) : null,
+      error: item.error,
+    })),
+  };
+}
+
+export function toTemplate(dto: MessageTemplateDto): MessageTemplate {
+  return { id: dto.id, name: dto.name, body: dto.body, createdAt: dto.created_at, updatedAt: dto.updated_at };
 }
 
 function isApiErrorDto(body: unknown): body is ApiErrorDto {

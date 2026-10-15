@@ -8,7 +8,7 @@ const NETWORK_ERROR = 'We could not reach the server. Check your connection and 
 const TIMEOUT_ERROR = 'The server took too long to respond. Please try again.';
 
 interface RequestOptions {
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
   idempotencyKey?: string;
 }

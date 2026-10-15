@@ -70,3 +70,44 @@ export interface BulkSendResult {
   failedCount: number;
   results: BulkRecipientResult[];
 }
+
+export type ScheduledStatus = 'scheduled' | 'sending' | 'sent' | 'cancelled';
+
+export interface ScheduledMessage {
+  id: string;
+  candidateId: string;
+  /** Rendered for this candidate. */
+  body: string;
+  scheduledFor: string;
+  status: ScheduledStatus;
+  groupId: string | null;
+  messageId: string | null;
+  canCancel: boolean;
+  createdAt: string;
+  cancelledAt: string | null;
+}
+
+export interface ScheduleInput {
+  candidateIds: string[];
+  body: string;
+  /** ISO 8601 with timezone. */
+  scheduledFor: string;
+  idempotencyKey: string;
+}
+
+export interface ScheduleRecipientResult {
+  candidateId: string;
+  candidateName: string | null;
+  accepted: boolean;
+  scheduledMessage: ScheduledMessage | null;
+  error: string | null;
+}
+
+export interface ScheduleResult {
+  groupId: string | null;
+  scheduledFor: string;
+  total: number;
+  acceptedCount: number;
+  failedCount: number;
+  results: ScheduleRecipientResult[];
+}

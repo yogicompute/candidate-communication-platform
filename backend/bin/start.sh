@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Render start step: apply migrations, load demo candidates, then run the dummy provider
-# (a separate process on localhost) alongside the Django API served by gunicorn.
+# (a separate process on localhost) and the message scheduler alongside the Django API served by
+# gunicorn. On the free plan nothing runs while the service sleeps; due messages go out on wake.
 set -euo pipefail
 
 PORT="${PORT:-8000}"
@@ -10,6 +11,7 @@ python manage.py migrate --noinput
 python manage.py seed_candidates
 
 python -m providers.dummy_server &
+python manage.py run_scheduler &
 
 exec gunicorn config.wsgi:application \
   --bind "0.0.0.0:${PORT}" \

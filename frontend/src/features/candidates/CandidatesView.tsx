@@ -17,6 +17,7 @@ import Stack from '@mui/material/Stack';
 import TablePagination from '@mui/material/TablePagination';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import EmptyIllustration from '@/components/EmptyIllustration';
 import EmptyState from '@/components/EmptyState';
 import ErrorState from '@/components/ErrorState';
 import LoadingState from '@/components/LoadingState';
@@ -31,13 +32,13 @@ import {
   toListFilters,
   type CandidateFilters,
 } from '@/features/candidates/candidateFilters';
-import BulkMessageDialog from '@/features/messages/BulkMessageDialog';
+import SendMessageSheet from '@/features/messages/SendMessageSheet';
 import { getErrorMessage } from '@/services/apiError';
 import { candidateService } from '@/services/candidateService';
 import type { Paginated } from '@/types/api';
 import type { Candidate, DeleteCandidatesResult } from '@/types/candidate';
-import type { BulkSendResult } from '@/types/message';
-import { summarizeBulkResult } from '@/utils/messages';
+import type { BulkSendResult, ScheduleResult } from '@/types/message';
+import { summarizeBulkResult, summarizeScheduleResult } from '@/utils/messages';
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -65,6 +66,7 @@ export default function CandidatesView() {
   const [selected, setSelected] = useState<Map<string, Candidate>>(() => new Map());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteSession, setDeleteSession] = useState(0);
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -136,6 +138,11 @@ export default function CandidatesView() {
     reload();
   }
 
+  function openDeleteDialog() {
+    setDeleteSession((session) => session + 1);
+    setDeleteOpen(true);
+  }
+
   function handleDeleted({ deletedIds, notFoundIds }: DeleteCandidatesResult) {
     setDeleteOpen(false);
     setSelected((prev) => {
@@ -144,9 +151,11 @@ export default function CandidatesView() {
       return next;
     });
     const alreadyRemoved = notFoundIds.length
-      ? ` ${pluralCandidates(notFoundIds.length)} had already been removed.`
+      ? `. ${pluralCandidates(notFoundIds.length)} had already been removed.`
       : '';
-    setNotice({ severity: 'success', text: `Deleted ${pluralCandidates(deletedIds.length)}.${alreadyRemoved}` });
+    const deleted =
+      deletedIds.length === 1 ? 'Candidate deleted' : `${deletedIds.length} Candidates deleted`;
+    setNotice({ severity: 'success', text: `${deleted} successfully${alreadyRemoved}` });
     setPage(0);
     reload();
   }
@@ -182,7 +191,7 @@ export default function CandidatesView() {
 
   function handleCreated(candidate: Candidate) {
     setDialogOpen(false);
-    setNotice({ severity: 'success', text: `${candidate.fullName} was added.` });
+    setNotice({ severity: 'success', text: `${candidate.fullName} added successfully` });
     clearFilters();
     reload();
   }
@@ -200,7 +209,16 @@ export default function CandidatesView() {
   function handleBulkCompleted(bulkResult: BulkSendResult) {
     setSelected(new Map());
     reload();
-    if (!bulkOpenRef.current) setNotice(summarizeBulkResult(bulkResult));
+    // Figma: a fully successful send closes the sheet and confirms with a toast. Failures stay in the
+    // open sheet as per-recipient results; if the sheet was closed while sending, a toast summarises.
+    if (bulkResult.failedCount === 0) setBulkDialogOpen(false);
+    if (bulkResult.failedCount === 0 || !bulkOpenRef.current) setNotice(summarizeBulkResult(bulkResult));
+  }
+
+  function handleScheduled(scheduleResult: ScheduleResult) {
+    setSelected(new Map());
+    setBulkDialogOpen(false);
+    setNotice(summarizeScheduleResult(scheduleResult));
   }
 
   let content: ReactNode = null;
@@ -208,18 +226,6 @@ export default function CandidatesView() {
     content = <LoadingState label="Loading candidates…" />;
   } else if (error) {
     content = <ErrorState title="Couldn't load candidates" message={error} onRetry={reload} />;
-  } else if (data && data.items.length === 0 && !hasFilters) {
-    content = (
-      <EmptyState
-        title="No candidates yet"
-        description="Add your first candidate to start messaging."
-        action={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
-            Add candidate
-          </Button>
-        }
-      />
-    );
   } else if (data) {
     content = (
       <>
@@ -232,7 +238,13 @@ export default function CandidatesView() {
           filters={filters}
           onFiltersChange={updateFilters}
         />
-        {data.items.length === 0 ? (
+        {data.items.length === 0 && !hasFilters ? (
+          <EmptyState
+            icon={<EmptyIllustration />}
+            title="No candidates added"
+            description="When you add a candidate, they will appear here."
+          />
+        ) : data.items.length === 0 ? (
           <EmptyState
             title="No matching candidates"
             description="Try different filters or search terms, or clear them to see everyone."
@@ -252,9 +264,7 @@ export default function CandidatesView() {
     );
   }
 
-  const sendLabel = bulkBusy
-    ? 'Sending…'
-    : `Send message${selected.size > 0 ? ` (${selected.size})` : ''}`;
+  const sendLabel = bulkBusy ? 'Sending…' : 'Send message';
 
   return (
     <>
@@ -267,12 +277,11 @@ export default function CandidatesView() {
             </Button>
             <Button
               variant="contained"
-              color="error"
               startIcon={<DeleteIcon />}
               disabled={selected.size === 0}
-              onClick={() => setDeleteOpen(true)}
+              onClick={openDeleteDialog}
             >
-              {`Delete candidate${selected.size > 0 ? ` (${selected.size})` : ''}`}
+              {selected.size > 1 ? 'Delete candidates' : 'Delete candidate'}
             </Button>
             <Button
               variant="contained"
@@ -354,28 +363,30 @@ export default function CandidatesView() {
       <CandidateHistorySheet candidateId={historyId} open={historyOpen} onClose={closeHistory} />
 
       <DeleteCandidatesDialog
+        key={`delete-${deleteSession}`}
         open={deleteOpen}
         candidates={selectedList}
         onClose={() => setDeleteOpen(false)}
         onDeleted={handleDeleted}
       />
 
-      <BulkMessageDialog
-        key={bulkSession}
+      <SendMessageSheet
+        key={`send-${bulkSession}`}
         open={bulkOpen}
         recipients={selectedList}
         onClose={() => setBulkDialogOpen(false)}
         onBusyChange={setBulkBusy}
         onCompleted={handleBulkCompleted}
+        onScheduled={handleScheduled}
       />
 
       <Snackbar
         open={notice !== null}
         autoHideDuration={5000}
         onClose={() => setNotice(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Alert severity={notice?.severity ?? 'success'} variant="filled" onClose={() => setNotice(null)}>
+        <Alert severity={notice?.severity ?? 'success'} onClose={() => setNotice(null)} sx={{ boxShadow: 3 }}>
           {notice?.text}
         </Alert>
       </Snackbar>

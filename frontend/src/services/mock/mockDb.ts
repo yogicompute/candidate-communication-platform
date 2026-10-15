@@ -1,7 +1,15 @@
 import { ApiError } from '@/services/apiError';
 import { SEED_CANDIDATES, SEED_MESSAGES } from '@/services/mock/mockData';
 import type { Candidate } from '@/types/candidate';
-import type { BulkSendResult, FailureCode, Message, MessageStatus } from '@/types/message';
+import type {
+  BulkSendResult,
+  FailureCode,
+  Message,
+  MessageStatus,
+  ScheduledMessage,
+  ScheduleResult,
+} from '@/types/message';
+import type { MessageTemplate } from '@/types/template';
 
 const STORAGE_KEY = 'ccp:mock-db:v2';
 const FAIL_KEY = 'ccp:mock-fail';
@@ -9,6 +17,9 @@ const FAIL_KEY = 'ccp:mock-fail';
 export type CandidateRecord = Omit<Candidate, 'lastMessageAt' | 'lastMessageStatus'>;
 
 export type MessageRecord = Omit<Message, 'canRetry'>;
+
+/** body keeps its placeholders until the message is sent. */
+export type ScheduledRecord = Omit<ScheduledMessage, 'canCancel'>;
 
 export interface StatusEvent {
   status: Exclude<MessageStatus, 'pending'>;
@@ -20,7 +31,9 @@ export interface MockDb {
   candidates: CandidateRecord[];
   messages: MessageRecord[];
   pendingCallbacks: Record<string, StatusEvent[]>;
-  idempotency: Record<string, Message | BulkSendResult>;
+  idempotency: Record<string, Message | BulkSendResult | ScheduleResult>;
+  templates: MessageTemplate[];
+  scheduled: ScheduledRecord[];
 }
 
 let db: MockDb | null = null;
@@ -33,6 +46,8 @@ function seedDb(): MockDb {
     messages: structuredClone(SEED_MESSAGES),
     pendingCallbacks: {},
     idempotency: {},
+    templates: [],
+    scheduled: [],
   };
 }
 
@@ -57,6 +72,9 @@ function isFailureSimulated(): boolean {
 
 export function getDb(): MockDb {
   db ??= readStoredDb() ?? seedDb();
+  // Stored before these features existed.
+  db.templates ??= [];
+  db.scheduled ??= [];
   return db;
 }
 

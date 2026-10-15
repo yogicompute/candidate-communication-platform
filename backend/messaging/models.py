@@ -2,6 +2,7 @@ import uuid
 
 from django.db import models
 from django.db.models import Q
+from django.db.models.functions import Lower
 
 from candidates.models import Candidate
 from messaging.failures import is_retryable
@@ -10,6 +11,7 @@ from providers.base import FailureCode
 MAX_ATTEMPTS = 3
 MESSAGE_MAX_LENGTH = 1000
 MAX_BULK_RECIPIENTS = 100
+TEMPLATE_NAME_MAX_LENGTH = 100
 
 
 def generate_message_id() -> str:
@@ -78,6 +80,74 @@ class Message(models.Model):
             and self.retry_attempt is None
             and self.attempt_number < MAX_ATTEMPTS
         )
+
+
+def generate_scheduled_id() -> str:
+    return f"sch_{uuid.uuid4().hex}"
+
+
+class ScheduledStatus(models.TextChoices):
+    SCHEDULED = "scheduled", "Scheduled"
+    SENDING = "sending", "Sending"
+    SENT = "sent", "Sent"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class ScheduledMessage(models.Model):
+    """A message to send later. Kept apart from Message so the delivery status machine is unchanged;
+    when due, the scheduler creates a normal Message attempt and links it here.
+
+    body keeps the placeholders; they are rendered for the candidate when the message is sent.
+    """
+
+    public_id = models.CharField(max_length=40, unique=True, default=generate_scheduled_id, editable=False)
+    candidate = models.ForeignKey(Candidate, on_delete=models.PROTECT, related_name="scheduled_messages")
+    body = models.TextField(max_length=MESSAGE_MAX_LENGTH)
+    scheduled_for = models.DateTimeField()
+    status = models.CharField(
+        max_length=10, choices=ScheduledStatus.choices, default=ScheduledStatus.SCHEDULED
+    )
+    group_id = models.CharField(max_length=40, null=True, blank=True, db_index=True)
+    message = models.OneToOneField(
+        Message, null=True, blank=True, on_delete=models.PROTECT, related_name="scheduled_from"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["scheduled_for", "id"]
+        indexes = [models.Index(fields=["status", "scheduled_for"], name="scheduled_due")]
+
+    def __str__(self) -> str:
+        return f"{self.public_id} → {self.candidate.public_id} at {self.scheduled_for:%Y-%m-%d %H:%M} ({self.status})"
+
+    @property
+    def can_cancel(self) -> bool:
+        return self.status == ScheduledStatus.SCHEDULED
+
+
+def generate_template_id() -> str:
+    return f"tpl_{uuid.uuid4().hex[:12]}"
+
+
+class MessageTemplate(models.Model):
+    """Reusable message text. Its placeholders are rendered per recipient when a message is sent."""
+
+    public_id = models.CharField(max_length=20, unique=True, default=generate_template_id, editable=False)
+    name = models.CharField(max_length=TEMPLATE_NAME_MAX_LENGTH)
+    body = models.TextField(max_length=MESSAGE_MAX_LENGTH)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = [Lower("name"), "id"]
+        constraints = [
+            models.UniqueConstraint(Lower("name"), name="message_template_name_unique_ci"),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
 
 
 class IdempotencyRecord(models.Model):

@@ -5,7 +5,10 @@ import { usePathname } from 'next/navigation';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 
-const NAV_ITEMS = [{ label: 'Candidates', href: '/candidates' }] as const;
+const NAV_ITEMS = [
+  { label: 'Candidates', href: '/candidates' },
+  { label: 'Templates', href: '/templates' },
+] as const;
 
 export default function MainNav() {
   const pathname = usePathname();

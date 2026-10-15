@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from messaging.models import Message, MessageEvent
+from messaging.models import Message, MessageEvent, MessageTemplate, ScheduledMessage
 
 
 class MessageEventInline(admin.TabularInline):
@@ -41,3 +41,20 @@ class MessageAdmin(admin.ModelAdmin):
         "failed_at",
     )
     inlines = [MessageEventInline]
+
+
+@admin.register(MessageTemplate)
+class MessageTemplateAdmin(admin.ModelAdmin):
+    list_display = ("name", "public_id", "updated_at")
+    search_fields = ("name", "body")
+    readonly_fields = ("public_id", "created_at", "updated_at")
+
+
+
+@admin.register(ScheduledMessage)
+class ScheduledMessageAdmin(admin.ModelAdmin):
+    list_display = ("public_id", "candidate", "scheduled_for", "status", "message")
+    list_filter = ("status",)
+    search_fields = ("public_id", "group_id", "candidate__public_id", "candidate__full_name")
+    raw_id_fields = ("candidate", "message")
+    readonly_fields = ("public_id", "group_id", "created_at", "updated_at", "cancelled_at")
