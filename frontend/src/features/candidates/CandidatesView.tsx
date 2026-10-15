@@ -218,6 +218,7 @@ export default function CandidatesView() {
   function handleScheduled(scheduleResult: ScheduleResult) {
     setSelected(new Map());
     setBulkDialogOpen(false);
+    reload();
     setNotice(summarizeScheduleResult(scheduleResult));
   }
 

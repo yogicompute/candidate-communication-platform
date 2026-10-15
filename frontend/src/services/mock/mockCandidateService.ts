@@ -1,7 +1,7 @@
 import { ApiError } from '@/services/apiError';
 import type { CandidateService } from '@/services/candidateService';
 import { getDb, saveDb, simulateNetwork, type CandidateRecord } from '@/services/mock/mockDb';
-import { latestMessageFor, syncMessageStatuses } from '@/services/mock/mockMessageService';
+import { candidateStatusFor, latestMessageFor, syncMessageStatuses } from '@/services/mock/mockMessageService';
 import type { FieldErrors } from '@/types/api';
 import type {
   Candidate,
@@ -31,7 +31,7 @@ function toCandidate(record: CandidateRecord): Candidate {
   return {
     ...record,
     lastMessageAt: latest?.createdAt ?? null,
-    lastMessageStatus: latest?.status ?? null,
+    lastMessageStatus: candidateStatusFor(record.id, latest),
   };
 }
 

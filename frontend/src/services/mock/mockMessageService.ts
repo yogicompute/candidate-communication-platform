@@ -10,6 +10,7 @@ import {
   type StatusEvent,
 } from '@/services/mock/mockDb';
 import { failureFor, submitToProvider } from '@/services/mock/mockProvider';
+import type { CandidateStatus } from '@/types/candidate';
 import type {
   BulkRecipientResult,
   BulkSendResult,
@@ -89,6 +90,17 @@ export function syncMessageStatuses(): void {
   }
 
   if (changed) saveDb();
+}
+
+/** Same rule as the backend's with_last_message annotation. */
+export function candidateStatusFor(candidateId: string, latest: MessageRecord | undefined): CandidateStatus | null {
+  const items = getDb().scheduled.filter((item) => item.candidateId === candidateId);
+  if (items.some((item) => item.status === 'scheduled' || item.status === 'sending')) return 'scheduled';
+  const lastCancelled = Math.max(
+    ...items.flatMap((item) => (item.status === 'cancelled' && item.cancelledAt ? [Date.parse(item.cancelledAt)] : [])),
+  );
+  if (Number.isFinite(lastCancelled) && (!latest || lastCancelled > Date.parse(latest.createdAt))) return 'cancelled';
+  return latest?.status ?? null;
 }
 
 export function latestMessageFor(candidateId: string): MessageRecord | undefined {

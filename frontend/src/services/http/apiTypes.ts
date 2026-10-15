@@ -1,3 +1,4 @@
+import type { CandidateStatus } from '@/types/candidate';
 import type { FailureCode, MessageStatus, ScheduledStatus } from '@/types/message';
 
 export interface CandidateDto {
@@ -7,7 +8,7 @@ export interface CandidateDto {
   email: string;
   created_at: string;
   last_message_at: string | null;
-  last_message_status: MessageStatus | null;
+  last_message_status: CandidateStatus | null;
 }
 
 export interface CandidateInputDto {

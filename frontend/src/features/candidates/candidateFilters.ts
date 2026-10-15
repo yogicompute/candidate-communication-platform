@@ -1,5 +1,9 @@
-import type { CandidateListParams, CandidateStatusFilter } from '@/types/candidate';
-import { MESSAGE_STATUSES, MESSAGE_STATUS_LABELS } from '@/types/message';
+import {
+  CANDIDATE_STATUSES,
+  CANDIDATE_STATUS_LABELS,
+  type CandidateListParams,
+  type CandidateStatusFilter,
+} from '@/types/candidate';
 
 export type StatusFilterValue = CandidateStatusFilter | 'all';
 
@@ -29,7 +33,7 @@ export const EMPTY_FILTERS: CandidateFilters = {
 export const STATUS_FILTER_OPTIONS: { value: StatusFilterValue; label: string }[] = [
   { value: 'all', label: 'All statuses' },
   { value: 'none', label: 'Never messaged' },
-  ...MESSAGE_STATUSES.map((status) => ({ value: status, label: MESSAGE_STATUS_LABELS[status] })),
+  ...CANDIDATE_STATUSES.map((status) => ({ value: status, label: CANDIDATE_STATUS_LABELS[status] })),
 ];
 
 function startOfLocalDay(date: string, addDays = 0): string {

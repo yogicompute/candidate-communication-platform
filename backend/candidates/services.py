@@ -2,21 +2,42 @@ import re
 from datetime import datetime
 
 from django.db import IntegrityError, transaction
-from django.db.models import OuterRef, Q, QuerySet, Subquery
+from django.db.models import Case, CharField, Exists, F, OuterRef, Q, QuerySet, Subquery, Value, When
 from django.utils import timezone
 
 from candidates.models import Candidate, generate_public_id
 from config.exceptions import ApiError
-from messaging.models import Message
+from messaging.models import Message, ScheduledMessage, ScheduledStatus
 
 MAX_PUBLIC_ID_ATTEMPTS = 5
 
 
 def with_last_message(queryset: QuerySet[Candidate]) -> QuerySet[Candidate]:
+    """Annotate the date of the last sent message and the candidate's most recent status:
+    "scheduled" while a scheduled message is waiting, else "cancelled" if a cancellation is newer
+    than the last sent message, else that message's delivery status."""
     latest = Message.objects.filter(candidate=OuterRef("pk")).order_by("-created_at", "-id")
+    upcoming = ScheduledMessage.objects.filter(
+        candidate=OuterRef("pk"), status__in=[ScheduledStatus.SCHEDULED, ScheduledStatus.SENDING]
+    )
+    last_cancelled = ScheduledMessage.objects.filter(
+        candidate=OuterRef("pk"), status=ScheduledStatus.CANCELLED
+    ).order_by("-cancelled_at", "-id")
+    cancelled_is_newest = Q(last_cancelled_at__isnull=False) & (
+        Q(last_message_at__isnull=True) | Q(last_cancelled_at__gt=F("last_message_at"))
+    )
     return queryset.annotate(
         last_message_at=Subquery(latest.values("created_at")[:1]),
-        last_message_status=Subquery(latest.values("status")[:1]),
+        latest_message_status=Subquery(latest.values("status")[:1]),
+        has_upcoming_scheduled=Exists(upcoming),
+        last_cancelled_at=Subquery(last_cancelled.values("cancelled_at")[:1]),
+    ).annotate(
+        last_message_status=Case(
+            When(has_upcoming_scheduled=True, then=Value(ScheduledStatus.SCHEDULED.value)),
+            When(cancelled_is_newest, then=Value(ScheduledStatus.CANCELLED.value)),
+            default=F("latest_message_status"),
+            output_field=CharField(),
+        )
     )
 
 

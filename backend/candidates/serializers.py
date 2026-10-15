@@ -6,7 +6,7 @@ E164_PATTERN = re.compile(r"^\+[1-9]\d{7,14}$")
 INDIAN_MOBILE_PATTERN = re.compile(r"^\+91[6-9]\d{9}$")
 PHONE_ERROR = "Enter a valid mobile number, e.g. 9876543210 or +91 9876543210."
 
-STATUS_FILTERS = ("pending", "sent", "delivered", "read", "failed", "none")
+STATUS_FILTERS = ("pending", "sent", "delivered", "read", "failed", "scheduled", "cancelled", "none")
 MAX_BULK_DELETE = 100
 
 
